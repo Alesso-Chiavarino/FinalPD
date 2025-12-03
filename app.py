@@ -1,11 +1,15 @@
-# app.py
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 
 from utils import load_excel
-from modelo import entrenar_y_predecir, detectar_anomalias, sugerencias_ahorro
+from modelo import (
+    entrenar_y_predecir,
+    detectar_anomalias,
+    sugerencias_ahorro,
+    sugerencias_avanzadas
+)
 
 # ---- CONFIGURACIÓN ----
 st.set_page_config(
@@ -27,6 +31,15 @@ archivo = st.sidebar.file_uploader(
     type=["xlsx"]
 )
 
+# ---------------- FILTRO DE FECHAS ----------------
+st.sidebar.divider()
+st.sidebar.subheader("📆 Filtro de fechas")
+rango_fechas = st.sidebar.date_input(
+    "Rango personalizado",
+    value=[],
+    key="rango"
+)
+
 # ---- Tipo de visualización ----
 st.sidebar.divider()
 agrupamiento = st.sidebar.selectbox(
@@ -42,7 +55,13 @@ if archivo is None:
 # ---- LECTURA DE DATOS ----
 df_raw = load_excel(archivo)
 
-with st.expander("👀 Vista previa de datos cargados", expanded=False):
+# ---- Aplicar filtro si corresponde ----
+if len(rango_fechas) == 2:
+    f_inicio, f_fin = rango_fechas
+    df_raw = df_raw[(df_raw["fecha"] >= pd.to_datetime(f_inicio)) &
+                    (df_raw["fecha"] <= pd.to_datetime(f_fin))]
+
+with st.expander("👀 Vista previa de datos filtrados", expanded=False):
     st.dataframe(df_raw.head(30), use_container_width=True)
 
 # ---- ENTRENAMIENTO ----
@@ -69,7 +88,7 @@ if agrupamiento == "Diario":
 elif agrupamiento == "Semanal":
     df["semana"] = df["fecha"].dt.to_period("W").apply(lambda r: r.start_time)
     agrupado = df.groupby("semana")["monto"].sum().reset_index().rename(columns={"semana": "fecha"})
-    x_col, y_col = "fecha", "monto"
+    x_col = "fecha"; y_col = "monto"
 
 else:  # Mensual
     agrupado = (
@@ -79,8 +98,7 @@ else:  # Mensual
         .rename(columns={"fecha": "mes", "monto": "total"})
     )
     agrupado["fecha"] = agrupado["mes"]
-    x_col, y_col = "fecha", "total"
-
+    x_col = "fecha"; y_col = "total"
 
 # --------------------- GRAFICO 1: EVOLUCIÓN ---------------------
 st.markdown("## 📈 Evolución del gasto")
@@ -95,9 +113,8 @@ st.pyplot(fig, use_container_width=True)
 
 st.divider()
 
-
 # --------------------- GRAFICO 2: TOP CATEGORÍAS ---------------------
-st.markdown("## 🏆 Categorías donde más gastaste en todo el período")
+st.markdown("## 🏆 Categorías donde más gastaste en el período analizado")
 
 top_cats = (
     df.groupby("categoria_nombre")["monto"]
@@ -110,11 +127,9 @@ fig_top, ax_top = plt.subplots(figsize=(10, 5))
 ax_top.barh(top_cats.index, top_cats.values, color="#8E44AD")
 ax_top.invert_yaxis()
 ax_top.set_xlabel("Monto total gastado ($)")
-ax_top.set_title("Top categorías del período analizado")
 st.pyplot(fig_top, use_container_width=True)
 
 st.divider()
-
 
 # ---------------- GRAFICO 3: COMPARACIÓN MES A MES ----------------
 st.markdown("## 🔄 Comparación del último mes vs mes anterior")
@@ -123,10 +138,12 @@ if pv.shape[0] >= 2:
     last_two = pv.tail(2)
 
     fig_cm, ax_cm = plt.subplots(figsize=(10, 5))
-    index = last_two.columns[:-1]  # sin la columna total
+    index = last_two.columns[:-1]
 
-    ax_cm.bar(index, last_two.iloc[-2][:-1], alpha=0.6, label=f"Mes anterior ({last_two.index[-2]})", color="#3498DB")
-    ax_cm.bar(index, last_two.iloc[-1][:-1], alpha=0.8, label=f"Último mes ({last_two.index[-1]})", color="#E74C3C")
+    ax_cm.bar(index, last_two.iloc[-2][:-1], alpha=0.6,
+              label=f"Mes anterior ({last_two.index[-2]})", color="#3498DB")
+    ax_cm.bar(index, last_two.iloc[-1][:-1], alpha=0.8,
+              label=f"Último mes ({last_two.index[-1]})", color="#E74C3C")
 
     plt.xticks(rotation=45)
     ax_cm.set_ylabel("Monto ($)")
@@ -137,26 +154,18 @@ else:
 
 st.divider()
 
-
 # -------------------- DISTRIBUCIÓN + PREDICCIÓN ---------------------
 colA, colB = st.columns([2, 1])
 
 with colA:
     st.markdown("### 🍩 Distribución por tipo de gasto (último mes)")
-
     if pv.shape[0] >= 1:
         last_row = pv.drop(columns=["total"], errors="ignore").tail(1).T
         last_row.columns = ["monto"]
 
         fig2, ax2 = plt.subplots(figsize=(6, 6))
         if last_row["monto"].sum() > 0:
-            ax2.pie(
-                last_row["monto"], 
-                labels=last_row.index,
-                autopct="%1.1f%%",
-                startangle=90
-            )
-        ax2.set_title(f"Distribución {pv.index[-1]}")
+            ax2.pie(last_row["monto"], labels=last_row.index, autopct="%1.1f%%", startangle=90)
         st.pyplot(fig2, use_container_width=True)
 
 with colB:
@@ -169,10 +178,11 @@ st.divider()
 #                                TABS SECUNDARIOS                              #
 # ============================================================================ #
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Datos detallados",
     "📦 Resumen por categoría",
-    "⚠️ Anomalías y Sugerencias"
+    "⚠️ Anomalías",
+    "💡 Sugerencias Inteligentes"
 ])
 
 with tab1:
@@ -185,13 +195,33 @@ with tab2:
 
 with tab3:
     st.subheader("🚨 Detección de anomalías")
-    daily_anom, _iso = detectar_anomalias(df)
-    st.dataframe(daily_anom[daily_anom["anomalia"]], use_container_width=True, height=240)
-    st.caption("Se marcan días con gastos atípicos usando IsolationForest.")
 
-    st.subheader("💡 Sugerencias de ahorro personalizadas")
-    tips = sugerencias_ahorro(pv, top_k=3)
-    for t in tips:
+    daily_anom, _iso = detectar_anomalias(df)
+
+    # SOLO anomalías
+    anomalos = daily_anom[daily_anom["anomalia"] == True]
+
+    if anomalos.empty:
+        st.success("No se detectaron anomalías 🚀")
+    else:
+        st.warning("Se encontraron gastos inusuales:")
+
+        for _, row in anomalos.iterrows():
+            st.error(
+                f"📌 **Fecha:** {row['fecha'].date()}\n"
+                f"💵 **Monto total del día:** ${row['monto']:.2f}"
+            )
+
+        st.write("### 📄 Tabla completa de anomalías")
+        st.dataframe(anomalos, use_container_width=True)
+
+with tab4:
+    st.subheader("💡 Sugerencias de ahorro (promedios vs último mes)")
+    for t in sugerencias_ahorro(pv, top_k=3):
+        st.markdown(f"- {t}")
+
+    st.subheader("🧠 Sugerencias avanzadas basadas en datos reales")
+    for t in sugerencias_avanzadas(pv):
         st.markdown(f"- {t}")
 
 st.divider()
@@ -199,7 +229,6 @@ st.divider()
 # ============================================================================ #
 #                                EXPORTACIÓN                                   
 # ============================================================================ #
-
 st.subheader("⬇️ Exportar datos procesados")
 col_exp1, col_exp2 = st.columns(2)
 
