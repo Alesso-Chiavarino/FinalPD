@@ -11,6 +11,9 @@ from modelo import (
     sugerencias_avanzadas
 )
 
+# ------------------------------------------------------------
+# CONFIGURACIÓN GENERAL
+# ------------------------------------------------------------
 st.set_page_config(
     page_title="SmartBudget – Asistente Financiero Inteligente",
     page_icon="💸",
@@ -23,30 +26,69 @@ st.caption(
     "y predice tus gastos futuros usando aprendizaje automático (Random Forest)."
 )
 
+# ------------------------------------------------------------
+# CARGA DE ARCHIVO
+# ------------------------------------------------------------
 st.sidebar.header("📂 Cargar archivo de gastos")
 archivo = st.sidebar.file_uploader(
     "Subí tu archivo Excel (.xlsx) con columnas: fecha, concepto, monto, descripcion",
     type=["xlsx"]
 )
 
-# Botón para descargar plantilla
+# Botón descargable para plantilla base
 with open("gastos.xlsx", "rb") as template_file:
-    st.sidebar.download_button( 
-        label="📥\u2003Descargar plantilla base",
+    st.sidebar.download_button(
+        label="📥 Descargar plantilla base",
         data=template_file.read(),
         file_name="gastos.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
 
+if archivo is None:
+    st.warning("⚠️ No subiste ningún archivo. Por favor, cargá un Excel con tus gastos para continuar.")
+    st.stop()
+
+# ------------------------------------------------------------
+# LECTURA DEL EXCEL Y CONVERSIÓN DE FECHAS
+# ------------------------------------------------------------
+df_raw = load_excel(archivo)
+
+# Convertir fechas ANTES de filtrar
+df_raw["fecha"] = pd.to_datetime(df_raw["fecha"], errors="coerce")
+df_raw = df_raw.dropna(subset=["fecha"])
+
+# ------------------------------------------------------------
+# CREAR RANGO AUTOMÁTICO DE FECHAS
+# ------------------------------------------------------------
+fecha_min = df_raw["fecha"].min().date()
+fecha_max = df_raw["fecha"].max().date()
+
 st.sidebar.divider()
 st.sidebar.subheader("📆 Filtro de fechas")
+
 rango_fechas = st.sidebar.date_input(
-    "Rango personalizado",
-    value=[],
+    "Seleccioná un rango",
+    value=(fecha_min, fecha_max),
+    min_value=fecha_min,
+    max_value=fecha_max,
     key="rango"
 )
 
+# Aplicar filtro de fechas si existen 2 fechas válidas
+if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
+    inicio, fin = rango_fechas
+    inicio = pd.to_datetime(inicio)
+    fin = pd.to_datetime(fin)
+    df_raw = df_raw[(df_raw["fecha"] >= inicio) & (df_raw["fecha"] <= fin)]
+
+# Vista previa
+with st.expander("👀 Vista previa de datos filtrados", expanded=False):
+    st.dataframe(df_raw.head(30), use_container_width=True)
+
+# ------------------------------------------------------------
+# TIPO DE AGRUPAMIENTO
+# ------------------------------------------------------------
 st.sidebar.divider()
 agrupamiento = st.sidebar.selectbox(
     "📆 Ver estadísticas por:",
@@ -54,20 +96,9 @@ agrupamiento = st.sidebar.selectbox(
     index=0
 )
 
-if archivo is None:
-    st.warning("⚠️ No subiste ningún archivo. Por favor, cargá un Excel con tus gastos para continuar.")
-    st.stop()
-
-df_raw = load_excel(archivo)
-
-if len(rango_fechas) == 2:
-    f_inicio, f_fin = rango_fechas
-    df_raw = df_raw[(df_raw["fecha"] >= pd.to_datetime(f_inicio)) &
-                    (df_raw["fecha"] <= pd.to_datetime(f_fin))]
-
-with st.expander("👀 Vista previa de datos filtrados", expanded=False):
-    st.dataframe(df_raw.head(30), use_container_width=True)
-
+# ------------------------------------------------------------
+# ENTRENAMIENTO DEL MODELO
+# ------------------------------------------------------------
 with st.spinner("Entrenando modelo y procesando datos..."):
     try:
         out = entrenar_y_predecir(df_raw)
@@ -79,28 +110,34 @@ df = out["df_limpio"]
 pv = out["pivot_mensual"]
 pred_mes = out["pred_siguiente_mes"]
 
+# ------------------------------------------------------------
+# AGRUPAMIENTO SEGÚN OPCIÓN
+# ------------------------------------------------------------
 if agrupamiento == "Diario":
     agrupado = df.groupby("fecha")["monto"].sum().reset_index()
     x_col = "fecha"; y_col = "monto"
 
 elif agrupamiento == "Semanal":
     df["semana"] = df["fecha"].dt.to_period("W").apply(lambda r: r.start_time)
-    agrupado = df.groupby("semana")["monto"].sum().reset_index().rename(columns={"semana": "fecha"})
+    agrupado = df.groupby("semana")["monto"].sum().reset_index().rename(columns={"semana":"fecha"})
     x_col = "fecha"; y_col = "monto"
 
-else:
+else: # Mensual
     agrupado = (
         df.groupby(df["fecha"].dt.to_period("M").astype(str))["monto"]
         .sum()
         .reset_index()
-        .rename(columns={"fecha": "mes", "monto": "total"})
+        .rename(columns={"fecha":"mes","monto":"total"})
     )
     agrupado["fecha"] = agrupado["mes"]
     x_col = "fecha"; y_col = "total"
 
+# ------------------------------------------------------------
+# GRÁFICO 1 — EVOLUCIÓN TEMPORAL
+# ------------------------------------------------------------
 st.markdown("## 📈 Evolución del gasto")
 
-fig, ax = plt.subplots(figsize=(12, 4))
+fig, ax = plt.subplots(figsize=(12,4))
 ax.plot(agrupado[x_col], agrupado[y_col], marker="o", linewidth=2.5, color="#1f77b4")
 ax.set_xlabel(agrupamiento)
 ax.set_ylabel("Monto total ($)")
@@ -110,6 +147,9 @@ st.pyplot(fig, use_container_width=True)
 
 st.divider()
 
+# ------------------------------------------------------------
+# GRÁFICO 2 — TOP CATEGORÍAS
+# ------------------------------------------------------------
 st.markdown("## 🏆 Categorías donde más gastaste en el período analizado")
 
 top_cats = (
@@ -119,7 +159,7 @@ top_cats = (
     .head(8)
 )
 
-fig_top, ax_top = plt.subplots(figsize=(10, 5))
+fig_top, ax_top = plt.subplots(figsize=(10,5))
 ax_top.barh(top_cats.index, top_cats.values, color="#8E44AD")
 ax_top.invert_yaxis()
 ax_top.set_xlabel("Monto total gastado ($)")
@@ -127,12 +167,15 @@ st.pyplot(fig_top, use_container_width=True)
 
 st.divider()
 
+# ------------------------------------------------------------
+# GRÁFICO 3 — COMPARACIÓN ENTRE MESES
+# ------------------------------------------------------------
 st.markdown("## 🔄 Comparación del último mes vs mes anterior")
 
 if pv.shape[0] >= 2:
     last_two = pv.tail(2)
 
-    fig_cm, ax_cm = plt.subplots(figsize=(10, 5))
+    fig_cm, ax_cm = plt.subplots(figsize=(10,5))
     index = last_two.columns[:-1]
 
     ax_cm.bar(index, last_two.iloc[-2][:-1], alpha=0.6,
@@ -149,30 +192,27 @@ else:
 
 st.divider()
 
-colA, colB = st.columns([2, 1])
+# ------------------------------------------------------------
+# GRÁFICO 4 — DISTRIBUCIÓN DEL ÚLTIMO MES
+# ------------------------------------------------------------
+st.markdown("### 🍩 Distribución por tipo de gasto (último mes)")
 
-with colA:
-    st.markdown("### 🍩 Distribución por tipo de gasto (último mes)")
+if pv.shape[0] >= 1:
+    last_row = pv.drop(columns=["total"], errors="ignore").tail(1).T
+    last_row.columns = ["monto"]
 
-    if pv.shape[0] >= 1:
-        last_row = pv.drop(columns=["total"], errors="ignore").tail(1).T
-        last_row.columns = ["monto"]
-
-        fig2, ax2 = plt.subplots(figsize=(6, 6))
-        if last_row["monto"].sum() > 0:
-            ax2.pie(
-                last_row["monto"],
-                labels=last_row.index,
-                autopct="%1.1f%%",
-                startangle=90
-            )
-        ax2.set_title(f"Distribución {pv.index[-1]}")
-        st.pyplot(fig2, use_container_width=True)
-    else:
-        st.write("Sin suficientes datos mensuales.")
+    fig2, ax2 = plt.subplots(figsize=(6,6))
+    ax2.pie(last_row["monto"], labels=last_row.index, autopct="%1.1f%%", startangle=90)
+    ax2.set_title(f"Distribución {pv.index[-1]}")
+    st.pyplot(fig2, use_container_width=True)
+else:
+    st.write("Sin suficientes datos mensuales.")
 
 st.divider()
 
+# ------------------------------------------------------------
+# SECCIÓN DE IA (PREDICCIÓN)
+# ------------------------------------------------------------
 st.markdown("""
 <div style="
     background-color: #f7f7f7;
@@ -205,9 +245,8 @@ with col_pred1:
         color = "red" if dif > 0 else "green"
 
         st.markdown(
-            f"<div style='font-size:20px;'>"
-            f"{flecha} <b style='color:{color};'>{porcentaje:.2f}%</b>"
-            f"</div>",
+            f"<div style='font-size:20px;'>{flecha} "
+            f"<b style='color:{color};'>{porcentaje:.2f}%</b></div>",
             unsafe_allow_html=True
         )
     else:
@@ -215,19 +254,19 @@ with col_pred1:
 
 with col_pred2:
     st.markdown("### 🧠 Factores según IA")
-
     modelo = out["modelo_regresion"]
     importancias = pd.Series(modelo.feature_importances_, index=pv.drop(columns=["total"]).columns)
-
     top_factors = importancias.sort_values(ascending=False).head(3)
 
     st.markdown("Los rubros que más influyen en tu gasto futuro son:")
-
     for cat, val in top_factors.items():
         st.markdown(f"- **{cat}** (peso: {val:.2f})")
 
 st.divider()
 
+# ------------------------------------------------------------
+# TABS SECUNDARIOS
+# ------------------------------------------------------------
 tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Datos detallados",
     "📦 Resumen por categoría",
@@ -245,7 +284,6 @@ with tab2:
 
 with tab3:
     st.subheader("🚨 Detección de anomalías")
-
     daily_anom, _iso = detectar_anomalias(df)
     anomalos = daily_anom[daily_anom["anomalia"] == True]
 
@@ -260,9 +298,6 @@ with tab3:
                 f"💵 Monto total del día: ${row['monto']:.2f}"
             )
 
-        st.write("### 📄 Tabla completa de anomalías")
-        st.dataframe(anomalos, use_container_width=True)
-
 with tab4:
     st.subheader("💡 Sugerencias de ahorro (promedios vs último mes)")
     for t in sugerencias_ahorro(pv, top_k=3):
@@ -274,6 +309,9 @@ with tab4:
 
 st.divider()
 
+# ------------------------------------------------------------
+# EXPORTACIÓN
+# ------------------------------------------------------------
 st.subheader("⬇️ Exportar datos procesados")
 col_exp1, col_exp2 = st.columns(2)
 
