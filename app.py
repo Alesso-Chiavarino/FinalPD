@@ -159,18 +159,85 @@ colA, colB = st.columns([2, 1])
 
 with colA:
     st.markdown("### 🍩 Distribución por tipo de gasto (último mes)")
+
     if pv.shape[0] >= 1:
         last_row = pv.drop(columns=["total"], errors="ignore").tail(1).T
         last_row.columns = ["monto"]
 
         fig2, ax2 = plt.subplots(figsize=(6, 6))
         if last_row["monto"].sum() > 0:
-            ax2.pie(last_row["monto"], labels=last_row.index, autopct="%1.1f%%", startangle=90)
+            ax2.pie(
+                last_row["monto"],
+                labels=last_row.index,
+                autopct="%1.1f%%",
+                startangle=90
+            )
+        ax2.set_title(f"Distribución {pv.index[-1]}")
         st.pyplot(fig2, use_container_width=True)
+    else:
+        st.write("Sin suficientes datos mensuales.")
 
-with colB:
-    st.markdown("### 🔮 Predicción IA")
-    st.metric(label="Gasto estimado próximo mes", value=f"${pred_mes:,.2f}")
+st.divider()
+
+# ======================================================================== #
+#                          🔮 SECCIÓN IA PREMIUM                            #
+# ======================================================================== #
+
+st.markdown("""
+<div style="
+    background-color: #f7f7f7;
+    padding: 25px;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+    margin-top: 10px;
+">
+<h2 style="text-align:center;color:#000">🔮 Predicción Inteligente del Próximo Mes</h2>
+<p style="text-align:center; color:#555;">
+Análisis realizado con un modelo Random Forest entrenado sobre tu historial mensual.
+</p>
+</div>
+""", unsafe_allow_html=True)
+
+# ---- Layout interno ----
+col_pred1, col_pred2 = st.columns([1, 1])
+
+# -------------------- LEFT SIDE: METRICS --------------------
+with col_pred1:
+    st.markdown("### 📌 Resultado Principal")
+    st.metric("🧾 Gasto estimado próximo mes", f"${pred_mes:,.2f}")
+
+    st.markdown("### 📉 Variación respecto al mes anterior")
+
+    if pv.shape[0] >= 2:
+        mes_anterior = pv["total"].iloc[-2]
+        dif = pred_mes - mes_anterior
+        porcentaje = (dif / mes_anterior) * 100
+
+        flecha = "🔼" if dif > 0 else "🔽"
+        color = "red" if dif > 0 else "green"
+
+        st.markdown(
+            f"<div style='font-size:20px;'>"
+            f"{flecha} <b style='color:{color};'>{porcentaje:.2f}%</b>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.info("Se necesita al menos un mes previo para comparar.")
+
+# -------------------- RIGHT SIDE: TOP FACTORS --------------------
+with col_pred2:
+    st.markdown("### 🧠 Factores según IA")
+
+    modelo = out["modelo_regresion"]
+    importancias = pd.Series(modelo.feature_importances_, index=pv.drop(columns=["total"]).columns)
+
+    top_factors = importancias.sort_values(ascending=False).head(3)
+
+    st.markdown("Los rubros que más influyen en tu gasto futuro son:")
+
+    for cat, val in top_factors.items():
+        st.markdown(f"- **{cat}** (peso: {val:.2f})")
 
 st.divider()
 
@@ -197,8 +264,6 @@ with tab3:
     st.subheader("🚨 Detección de anomalías")
 
     daily_anom, _iso = detectar_anomalias(df)
-
-    # SOLO anomalías
     anomalos = daily_anom[daily_anom["anomalia"] == True]
 
     if anomalos.empty:
@@ -227,7 +292,7 @@ with tab4:
 st.divider()
 
 # ============================================================================ #
-#                                EXPORTACIÓN                                   
+#                                EXPORTACIÓN                                   #
 # ============================================================================ #
 st.subheader("⬇️ Exportar datos procesados")
 col_exp1, col_exp2 = st.columns(2)
