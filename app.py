@@ -11,7 +11,6 @@ from modelo import (
     sugerencias_avanzadas
 )
 
-# ---- CONFIGURACIÓN ----
 st.set_page_config(
     page_title="SmartBudget – Asistente Financiero Inteligente",
     page_icon="💸",
@@ -20,18 +19,16 @@ st.set_page_config(
 
 st.title("💸 SmartBudget – Asistente Financiero Inteligente")
 st.caption(
-    "Analiza tus gastos diarios con **Pandas**, visualiza estadísticas con **Matplotlib** "
-    "y predice tus gastos futuros usando **aprendizaje automático (Random Forest)**."
+    "Analiza tus gastos diarios con Pandas, visualiza estadísticas con Matplotlib "
+    "y predice tus gastos futuros usando aprendizaje automático (Random Forest)."
 )
 
-# ---- SIDEBAR: CARGA DE ARCHIVO ----
 st.sidebar.header("📂 Cargar archivo de gastos")
 archivo = st.sidebar.file_uploader(
-    "Subí tu archivo Excel (.xlsx) con columnas: fecha, concepto, monto, [descripcion]",
+    "Subí tu archivo Excel (.xlsx) con columnas: fecha, concepto, monto, descripcion",
     type=["xlsx"]
 )
 
-# ---------------- FILTRO DE FECHAS ----------------
 st.sidebar.divider()
 st.sidebar.subheader("📆 Filtro de fechas")
 rango_fechas = st.sidebar.date_input(
@@ -40,7 +37,6 @@ rango_fechas = st.sidebar.date_input(
     key="rango"
 )
 
-# ---- Tipo de visualización ----
 st.sidebar.divider()
 agrupamiento = st.sidebar.selectbox(
     "📆 Ver estadísticas por:",
@@ -52,10 +48,8 @@ if archivo is None:
     st.warning("⚠️ No subiste ningún archivo. Por favor, cargá un Excel con tus gastos para continuar.")
     st.stop()
 
-# ---- LECTURA DE DATOS ----
 df_raw = load_excel(archivo)
 
-# ---- Aplicar filtro si corresponde ----
 if len(rango_fechas) == 2:
     f_inicio, f_fin = rango_fechas
     df_raw = df_raw[(df_raw["fecha"] >= pd.to_datetime(f_inicio)) &
@@ -64,7 +58,6 @@ if len(rango_fechas) == 2:
 with st.expander("👀 Vista previa de datos filtrados", expanded=False):
     st.dataframe(df_raw.head(30), use_container_width=True)
 
-# ---- ENTRENAMIENTO ----
 with st.spinner("Entrenando modelo y procesando datos..."):
     try:
         out = entrenar_y_predecir(df_raw)
@@ -76,11 +69,6 @@ df = out["df_limpio"]
 pv = out["pivot_mensual"]
 pred_mes = out["pred_siguiente_mes"]
 
-# ============================================================================ #
-#                           SECCIÓN PRINCIPAL VISUAL                           #
-# ============================================================================ #
-
-# ------ AGRUPAMIENTO PARA GRAFICO PRINCIPAL ------
 if agrupamiento == "Diario":
     agrupado = df.groupby("fecha")["monto"].sum().reset_index()
     x_col = "fecha"; y_col = "monto"
@@ -90,7 +78,7 @@ elif agrupamiento == "Semanal":
     agrupado = df.groupby("semana")["monto"].sum().reset_index().rename(columns={"semana": "fecha"})
     x_col = "fecha"; y_col = "monto"
 
-else:  # Mensual
+else:
     agrupado = (
         df.groupby(df["fecha"].dt.to_period("M").astype(str))["monto"]
         .sum()
@@ -100,7 +88,6 @@ else:  # Mensual
     agrupado["fecha"] = agrupado["mes"]
     x_col = "fecha"; y_col = "total"
 
-# --------------------- GRAFICO 1: EVOLUCIÓN ---------------------
 st.markdown("## 📈 Evolución del gasto")
 
 fig, ax = plt.subplots(figsize=(12, 4))
@@ -113,7 +100,6 @@ st.pyplot(fig, use_container_width=True)
 
 st.divider()
 
-# --------------------- GRAFICO 2: TOP CATEGORÍAS ---------------------
 st.markdown("## 🏆 Categorías donde más gastaste en el período analizado")
 
 top_cats = (
@@ -131,7 +117,6 @@ st.pyplot(fig_top, use_container_width=True)
 
 st.divider()
 
-# ---------------- GRAFICO 3: COMPARACIÓN MES A MES ----------------
 st.markdown("## 🔄 Comparación del último mes vs mes anterior")
 
 if pv.shape[0] >= 2:
@@ -154,7 +139,6 @@ else:
 
 st.divider()
 
-# -------------------- DISTRIBUCIÓN + PREDICCIÓN ---------------------
 colA, colB = st.columns([2, 1])
 
 with colA:
@@ -179,10 +163,6 @@ with colA:
 
 st.divider()
 
-# ======================================================================== #
-#                          🔮 SECCIÓN IA PREMIUM                            #
-# ======================================================================== #
-
 st.markdown("""
 <div style="
     background-color: #f7f7f7;
@@ -198,10 +178,8 @@ Análisis realizado con un modelo Random Forest entrenado sobre tu historial men
 </div>
 """, unsafe_allow_html=True)
 
-# ---- Layout interno ----
 col_pred1, col_pred2 = st.columns([1, 1])
 
-# -------------------- LEFT SIDE: METRICS --------------------
 with col_pred1:
     st.markdown("### 📌 Resultado Principal")
     st.metric("🧾 Gasto estimado próximo mes", f"${pred_mes:,.2f}")
@@ -225,7 +203,6 @@ with col_pred1:
     else:
         st.info("Se necesita al menos un mes previo para comparar.")
 
-# -------------------- RIGHT SIDE: TOP FACTORS --------------------
 with col_pred2:
     st.markdown("### 🧠 Factores según IA")
 
@@ -240,10 +217,6 @@ with col_pred2:
         st.markdown(f"- **{cat}** (peso: {val:.2f})")
 
 st.divider()
-
-# ============================================================================ #
-#                                TABS SECUNDARIOS                              #
-# ============================================================================ #
 
 tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Datos detallados",
@@ -273,8 +246,8 @@ with tab3:
 
         for _, row in anomalos.iterrows():
             st.error(
-                f"📌 **Fecha:** {row['fecha'].date()}\n"
-                f"💵 **Monto total del día:** ${row['monto']:.2f}"
+                f"📌 Fecha: {row['fecha'].date()}\n"
+                f"💵 Monto total del día: ${row['monto']:.2f}"
             )
 
         st.write("### 📄 Tabla completa de anomalías")
@@ -291,9 +264,6 @@ with tab4:
 
 st.divider()
 
-# ============================================================================ #
-#                                EXPORTACIÓN                                   #
-# ============================================================================ #
 st.subheader("⬇️ Exportar datos procesados")
 col_exp1, col_exp2 = st.columns(2)
 

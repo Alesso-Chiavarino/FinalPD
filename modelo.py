@@ -3,20 +3,11 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor, IsolationForest
 from utils import preprocess, cluster_concepts, monthly_pivot, build_supervised_dataset, rolling_stats
 
-
-# ==========================================================
-# ENTRENAMIENTO + PREDICCIÓN
-# ==========================================================
 def entrenar_y_predecir(df_raw: pd.DataFrame):
     df = preprocess(df_raw)
-
-    # Clustering automático
-    df, vectorizer, kmeans = cluster_concepts(df, n_clusters=8)
-
-    # Pivot mensual
+    df, _, _ = cluster_concepts(df, n_clusters=8)
     pv = monthly_pivot(df, use_names=True)
 
-    # Dataset supervisado
     X, y = build_supervised_dataset(pv)
     if len(X) < 3:
         raise ValueError("Se necesitan al menos 3 meses de datos para entrenar una predicción confiable.")
@@ -39,9 +30,6 @@ def entrenar_y_predecir(df_raw: pd.DataFrame):
     }
 
 
-# ==========================================================
-# DETECCIÓN DE ANOMALÍAS
-# ==========================================================
 def detectar_anomalias(df_limpio: pd.DataFrame, contamination: float = 0.05):
     daily = df_limpio.groupby("fecha")["monto"].sum().reset_index()
     X = daily[["monto"]].values
@@ -51,9 +39,6 @@ def detectar_anomalias(df_limpio: pd.DataFrame, contamination: float = 0.05):
     return daily.sort_values("fecha"), iso
 
 
-# ==========================================================
-# SUGERENCIAS – BASADAS EN PROMEDIOS
-# ==========================================================
 def sugerencias_ahorro(pivot_mensual: pd.DataFrame, top_k: int = 3) -> list[str]:
     if pivot_mensual.shape[0] < 2:
         return ["Cargá más meses para generar sugerencias."]
@@ -67,7 +52,6 @@ def sugerencias_ahorro(pivot_mensual: pd.DataFrame, top_k: int = 3) -> list[str]
     comp = comp.sort_values("delta", ascending=False)
 
     tips = []
-
     for cat, row in comp.head(top_k).iterrows():
         if row["delta"] > 0:
             tips.append(
@@ -82,9 +66,6 @@ def sugerencias_ahorro(pivot_mensual: pd.DataFrame, top_k: int = 3) -> list[str]
     return tips
 
 
-# ==========================================================
-# SUGERENCIAS AVANZADAS – DATOS REALES
-# ==========================================================
 def sugerencias_avanzadas(pivot_mensual: pd.DataFrame) -> list[str]:
     tips = []
 
@@ -103,10 +84,6 @@ def sugerencias_avanzadas(pivot_mensual: pd.DataFrame) -> list[str]:
     total_ultimo = ultimo["ultimo"].sum()
 
     for categoria, row in comp.iterrows():
-
-        # -------------------------------
-        # 1. Categorías con alto peso (%)
-        # -------------------------------
         porcentaje = (row["ultimo"] / total_ultimo) * 100
 
         if porcentaje > 15:
@@ -115,12 +92,8 @@ def sugerencias_avanzadas(pivot_mensual: pd.DataFrame) -> list[str]:
                 f"de tu gasto total del mes. Revisá si podés optimizar ese gasto."
             )
 
-        # ---------------------------------
-        # 2. Crecimiento fuerte vs historial
-        # ---------------------------------
         if row["promedio"] > 0 and row["pct"] > 1.25:
             aumento = (row["pct"] - 1) * 100
-
             tips.append(
                 f"• El gasto en **{categoria}** aumentó **{aumento:.1f}%** "
                 f"respecto a tu historial.\n"
