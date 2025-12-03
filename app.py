@@ -31,8 +31,8 @@ archivo = st.sidebar.file_uploader(
 
 # Botón para descargar plantilla
 with open("gastos.xlsx", "rb") as template_file:
-    st.sidebar.download_button(
-        label="📥 Descargar plantilla para subir gastos",
+    st.sidebar.download_button( 
+        label="📥\u2003Descargar plantilla base",
         data=template_file.read(),
         file_name="plantilla_gastos.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
