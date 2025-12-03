@@ -34,7 +34,7 @@ with open("gastos.xlsx", "rb") as template_file:
     st.sidebar.download_button( 
         label="📥\u2003Descargar plantilla base",
         data=template_file.read(),
-        file_name="plantilla_gastos.xlsx",
+        file_name="gastos.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
