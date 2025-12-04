@@ -85,6 +85,16 @@ SmartBudget/
 
 ---
 
+# Librerias y versiones utilizadas
+```
+streamlit==1.38.0
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.5.2
+matplotlib==3.9.0
+openpyxl==3.1.5
+```
+
 # 📦 Instalación
 
 Clonar el repositorio:
