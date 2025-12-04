@@ -89,12 +89,13 @@ SmartBudget/
 
 Clonar el repositorio:
 
-git clone https://github.com/usuario/SmartBudget.git
-cd SmartBudget
+git clone https://github.com/Alesso-Chiavarino/FinalPD
+cd FinalPD
 
 Instalar dependencias:
 
-pip install -r requirements.txt
+pip install -r requirements.txt (windows)
+pip3 install -r requirements.txt (macos/linux)
 
 ---
 
@@ -118,5 +119,5 @@ http://localhost:8501
 ---
 
 # 👤 Autor
-Desarrollado por: **[Tu nombre]**
+Desarrollado por: **Franco Lucero, Federico Casani, Alessandro Chiavarino**
 Materia: **Programación Declarativa – Final Python**
