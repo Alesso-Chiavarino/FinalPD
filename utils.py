@@ -56,6 +56,7 @@ def cluster_concepts(df: pd.DataFrame, n_clusters: int = 8):
     X = vectorizer.fit_transform(corpus)
 
     n_clusters = max(2, min(n_clusters, max(2, X.shape[0] // 20)))
+    # IA: KMeans usado para clustering de conceptos similares
     kmeans = KMeans(n_clusters=n_clusters, n_init="auto", random_state=42)
     labels = kmeans.fit_predict(X)
 

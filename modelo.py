@@ -12,6 +12,7 @@ def entrenar_y_predecir(df_raw: pd.DataFrame):
     if len(X) < 3:
         raise ValueError("Se necesitan al menos 3 meses de datos para entrenar una predicción confiable.")
 
+    # IA:Regresión / Análisis Predictivo
     modelo = RandomForestRegressor(n_estimators=300, random_state=42)
     modelo.fit(X, y)
 
@@ -33,6 +34,7 @@ def entrenar_y_predecir(df_raw: pd.DataFrame):
 def detectar_anomalias(df_limpio: pd.DataFrame, contamination: float = 0.05):
     daily = df_limpio.groupby("fecha")["monto"].sum().reset_index()
     X = daily[["monto"]].values
+    # IA: detecta anomalías en el gasto diario, patrones inusuales
     iso = IsolationForest(contamination=contamination, random_state=42)
     labels = iso.fit_predict(X)
     daily["anomalia"] = (labels == -1)
